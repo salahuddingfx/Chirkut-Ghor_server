@@ -3,10 +3,11 @@ const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const { sendEmail } = require('../utils/emailService');
 
-// Generate JWT token
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || '30d',
+// Generate JWT token - admin 1hr, others 24hr
+const generateToken = (id, role) => {
+  const isAdmin = role === 'admin' || role === 'super_admin';
+  return jwt.sign({ id, role }, process.env.JWT_SECRET, {
+    expiresIn: isAdmin ? '1h' : '24h',
   });
 };
 
@@ -59,7 +60,7 @@ const register = async (req, res) => {
       console.error('Full error:', emailError);
     }
 
-    const token = generateToken(user._id);
+    const token = generateToken(user._id, user.role);
 
     res.status(201).json({
       _id: user._id,
@@ -67,6 +68,7 @@ const register = async (req, res) => {
       email: user.email,
       role: user.role,
       token,
+      expiresIn: user.role === 'admin' || user.role === 'super_admin' ? 3600 : 86400,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -101,11 +103,13 @@ const login = async (req, res) => {
     user.lastLogin = new Date();
     await user.save();
 
-    const token = generateToken(user._id);
+    const token = generateToken(user._id, user.role);
+    const isAdmin = user.role === 'admin' || user.role === 'super_admin';
     
     console.log('🔓 User logged in:', {
       email: user.email,
       role: user.role,
+      expiresIn: isAdmin ? '1 hour' : '24 hours',
       token: token.substring(0, 20) + '...'
     });
 
@@ -116,6 +120,7 @@ const login = async (req, res) => {
       email: user.email,
       role: user.role,
       token,
+      expiresIn: isAdmin ? 3600 : 86400,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -271,9 +276,18 @@ const refreshToken = async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const newToken = generateToken(decoded.id);
+    const user = await User.findById(decoded.id);
+    if (!user) {
+      return res.status(401).json({ message: 'User not found' });
+    }
 
-    res.json({ token: newToken });
+    const newToken = generateToken(decoded.id, user.role);
+    const isAdmin = user.role === 'admin' || user.role === 'super_admin';
+
+    res.json({
+      token: newToken,
+      expiresIn: isAdmin ? 3600 : 86400,
+    });
   } catch (error) {
     res.status(401).json({ message: 'Invalid token' });
   }
