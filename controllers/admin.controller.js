@@ -5,6 +5,7 @@ const Coupon = require('../models/Coupon');
 const Banner = require('../models/Banner');
 const EmailLog = require('../models/EmailLog');
 const HotOffer = require('../models/HotOffer');
+const FlashSale = require('../models/FlashSale');
 const DeliverySetting = require('../models/DeliverySetting');
 const Review = require('../models/Review');
 const steadfastService = require('../utils/steadfastService');
@@ -981,6 +982,97 @@ const deleteReview = async (req, res) => {
   }
 };
 
+// @desc    Get all flash sales (admin)
+// @route   GET /api/admin/flash-sales
+// @access  Private/Admin
+const getFlashSales = async (req, res) => {
+  try {
+    const flashSales = await FlashSale.find()
+      .populate('products', 'name price originalPrice image')
+      .populate('createdBy', 'name')
+      .sort({ createdAt: -1 });
+    res.json(flashSales);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Create flash sale
+// @route   POST /api/admin/flash-sales
+// @access  Private/Admin
+const createFlashSale = async (req, res) => {
+  try {
+    const { title, subtitle, badgeText, discountPercent, products, isActive, startDate, endDate } = req.body;
+    const flashSale = await FlashSale.create({
+      title, subtitle, badgeText, discountPercent, products, isActive, startDate, endDate,
+      createdBy: req.user._id,
+    });
+    const populated = await flashSale.populate('products', 'name price originalPrice image');
+    emitEvent(req, 'flash_sale:created', populated);
+    res.status(201).json(populated);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// @desc    Update flash sale
+// @route   PUT /api/admin/flash-sales/:id
+// @access  Private/Admin
+const updateFlashSale = async (req, res) => {
+  try {
+    const flashSale = await FlashSale.findByIdAndUpdate(req.params.id, req.body, {
+      new: true, runValidators: true,
+    })
+      .populate('products', 'name price originalPrice image')
+      .populate('createdBy', 'name');
+
+    if (!flashSale) {
+      return res.status(404).json({ message: 'Flash sale not found' });
+    }
+
+    emitEvent(req, 'flash_sale:updated', flashSale);
+    res.json(flashSale);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// @desc    Delete flash sale
+// @route   DELETE /api/admin/flash-sales/:id
+// @access  Private/Admin
+const deleteFlashSale = async (req, res) => {
+  try {
+    const flashSale = await FlashSale.findByIdAndDelete(req.params.id);
+    if (!flashSale) {
+      return res.status(404).json({ message: 'Flash sale not found' });
+    }
+    emitEvent(req, 'flash_sale:deleted', { _id: flashSale._id });
+    res.json({ message: 'Flash sale deleted' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get active flash sale (public)
+// @route   GET /api/promotions/flash-sale
+// @access  Public
+const getActiveFlashSale = async (req, res) => {
+  try {
+    const now = new Date();
+    const sale = await FlashSale.findOne({
+      isActive: true,
+      startDate: { $lte: now },
+      endDate: { $gte: now },
+    })
+      .populate('products', 'name price originalPrice image slug rating reviewCount stock category')
+      .sort({ createdAt: -1 });
+
+    res.json(sale || null);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getReportsSummary,
@@ -1011,5 +1103,10 @@ module.exports = {
   getActiveHotOffer,
   getAllReviews,
   updateReviewStatus,
-  deleteReview
+  deleteReview,
+  getFlashSales,
+  createFlashSale,
+  updateFlashSale,
+  deleteFlashSale,
+  getActiveFlashSale
 };
