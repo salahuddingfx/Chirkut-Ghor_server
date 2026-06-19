@@ -26,6 +26,10 @@ const {
 	getAllReviews,
 	updateReviewStatus,
 	deleteReview,
+	getFlashSales,
+	createFlashSale,
+	updateFlashSale,
+	deleteFlashSale,
 } = require('../controllers/admin.controller');
 const { auth, authorize } = require('../middlewares/auth.middleware');
 
@@ -78,6 +82,12 @@ router.put('/settings/delivery', updateDeliverySettings);
 router.get('/reviews', getAllReviews);
 router.put('/reviews/:id/status', updateReviewStatus);
 router.delete('/reviews/:id', deleteReview);
+
+// Flash sales
+router.get('/flash-sales', getFlashSales);
+router.post('/flash-sales', createFlashSale);
+router.put('/flash-sales/:id', updateFlashSale);
+router.delete('/flash-sales/:id', deleteFlashSale);
 
 // Email logs
 router.get('/email-logs', getEmailLogs);
